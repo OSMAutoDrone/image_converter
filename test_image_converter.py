@@ -26,16 +26,51 @@ class ImageConverterTests(unittest.TestCase):
             with Image.open(destination) as converted:
                 self.assertEqual(converted.size, (100, 50))
 
-    def test_finds_heic_files_in_folder_recursively(self):
+    def test_finds_supported_files_in_folder_recursively(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
             (folder / "nested").mkdir()
             (folder / "nested" / "photo.HEIC").touch()
-            (folder / "ignored.jpg").touch()
+            (folder / "nested" / "scan.JPEG").touch()
+            (folder / "photo.jpg").touch()
+            (folder / "ignored.png").touch()
 
             found = image_converter.find_images([tmp])
 
-            self.assertEqual([path.name for path in found], ["photo.HEIC"])
+            self.assertEqual(
+                [path.name for path in found],
+                ["photo.HEIC", "scan.JPEG", "photo.jpg"],
+            )
+
+    def test_converts_jpeg_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            source = folder / "source.jpeg"
+            Image.new("RGB", (20, 10), "white").save(source, format="JPEG")
+
+            destination = image_converter.convert_image(
+                source, folder / "output", "png", 100
+            )
+
+            self.assertEqual(destination.name, "source.png")
+            with Image.open(destination) as converted:
+                self.assertEqual(converted.size, (20, 10))
+
+    def test_jpeg_quality_is_applied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            source = folder / "source.png"
+            Image.new("RGB", (32, 32), "white").save(source)
+
+            low_quality = image_converter.convert_image(
+                source, folder / "low", "jpg", 100, 10
+            )
+            high_quality = image_converter.convert_image(
+                source, folder / "high", "jpg", 100, 100
+            )
+
+            with Image.open(low_quality) as low, Image.open(high_quality) as high:
+                self.assertNotEqual(low.quantization, high.quantization)
 
     def test_resize_rejects_values_outside_range(self):
         parser = image_converter.build_parser()
@@ -46,6 +81,24 @@ class ImageConverterTests(unittest.TestCase):
         parser = image_converter.build_parser()
         args = parser.parse_args(["--resize", "80", "photo.heic"])
         self.assertEqual(args.resize, 80)
+
+    def test_quality_defaults_to_100(self):
+        parser = image_converter.build_parser()
+        args = parser.parse_args(["photo.heic"])
+        self.assertEqual(args.quality, 100)
+
+    def test_quality_accepts_values_between_10_and_100(self):
+        parser = image_converter.build_parser()
+        for value in ("10", "75", "100"):
+            with self.subTest(value=value):
+                args = parser.parse_args(["--quality", value, "photo.heic"])
+                self.assertEqual(args.quality, int(value))
+
+    def test_quality_rejects_values_outside_range(self):
+        parser = image_converter.build_parser()
+        for value in ("9", "101"):
+            with self.subTest(value=value), self.assertRaises(SystemExit):
+                parser.parse_args(["--quality", value, "photo.heic"])
 
 
 if __name__ == "__main__":

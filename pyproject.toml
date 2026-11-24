@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "image-converter"
 version = "1.0.0"
-description = "Convert HEIC/HEIF images to JPG, PNG, or WebP"
+description = "Convert HEIC/HEIF or JPEG images to JPG, PNG, or WebP"
 requires-python = ">=3.9"
 dependencies = [
     "Pillow>=10.0",
